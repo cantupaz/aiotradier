@@ -8,18 +8,16 @@ import sys
 
 import aiohttp
 
-sys.path.insert(0, "/home/vscode/OptionScreener/OptionScreener/aiotradier/")
-from aiotradier.tradier_rest import TradierRestAdapter
+sys.path.insert(0, "/home/vscode/aiotradier/")
+from aiotradier.tradier_rest import TradierAPIAdapter
 from aiotradier.exceptions import TradierError
 
 
-_LOGGER = logging.getLogger(__name__)
-
-token = ""
+_LOGGER = logging.getLogger("aiotradier.tradier_rest")
 
 
 async def do_account_stuff(client):
-    """Exercise some API functions."""
+    """Exercise API functions related to accounts."""
     res = await client.api_get_user_profile()
     print(res)
     account_id = res["profile"]["account"]["account_number"]
@@ -30,8 +28,12 @@ async def do_account_stuff(client):
     res = await client.api_get_positions(account_id)
     print(res)
 
+    res = await client.api_get_account_history(account_id)
+    print(res)
+
 
 async def do_quotes_stuff(client):
+    """Exercise API functions to get information about securities."""
     res = await client.api_get_quotes(["M", "T"], False)
     print(res)
 
@@ -44,7 +46,17 @@ async def do_quotes_stuff(client):
     res = await client.api_get_option_strikes("M", next_expiration)
     print(res)
 
-    res = await client.api_get_option_chains(symbol, next_expiration)
+    # res = await client.api_get_option_chains(symbol, next_expiration)
+    # print(res)
+
+    res = await client.api_get_historical_quotes(
+        symbol,
+        start=datetime.date(year=2024, month=1, day=1),
+        end=datetime.date(year=2024, month=1, day=9),
+    )
+    print(res)
+
+    res = await client.api_get_clock()
     print(res)
 
 
@@ -54,17 +66,20 @@ async def main():
     _LOGGER.setLevel(10)
     _LOGGER.addHandler(logging.StreamHandler())
 
+    with open("token.txt", "r", encoding="utf-8") as file:
+        token = file.readline().strip()
+
     async with aiohttp.ClientSession() as aiohttp_session:
-        client = TradierRestAdapter(aiohttp_session, token)
+        client = TradierAPIAdapter(aiohttp_session, token)
 
         try:
-            # await do_account_stuff(client)
+            await do_account_stuff(client)
             await do_quotes_stuff(client)
 
         except TradierError as err:
             print(f"Error: {err.args}")
 
-    print(client.raw_data())
+    # print(client.raw_data())
 
 
 if __name__ == "__main__":

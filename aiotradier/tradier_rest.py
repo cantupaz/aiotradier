@@ -12,7 +12,9 @@ from .const import (
     API_ACCOUNTS,
     API_BALANCES,
     API_CHAINS,
+    API_CLOCK,
     API_EXPIRATIONS,
+    API_HISTORY,
     API_MARKETS,
     API_OPTIONS,
     API_POSITIONS,
@@ -23,9 +25,12 @@ from .const import (
     API_USER,
     API_V1,
     HTTP_CALL_TIMEOUT,
+    RAW_ACCOUNT_HISTORY,
     RAW_BALANCES,
     RAW_CHAINS,
+    RAW_CLOCK,
     RAW_EXPIRATIONS,
+    RAW_HISTORICAL_QUOTES,
     RAW_POSITIONS,
     RAW_STRIKES,
     RAW_USER_PROFILE,
@@ -35,7 +40,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class TradierRestAdapter:
+class TradierAPIAdapter:
     """Access Tradier API."""
 
     def __init__(
@@ -48,15 +53,7 @@ class TradierRestAdapter:
         self.aiohttp_session: ClientSession | None = aiohttp_session
         self.token = token
 
-        self._api_raw_data: dict[str, Any] = {
-            RAW_USER_PROFILE: {},
-            RAW_BALANCES: {},
-            RAW_POSITIONS: {},
-            RAW_QUOTES: {},
-            RAW_CHAINS: {},
-            RAW_EXPIRATIONS: {},
-            RAW_STRIKES: {},
-        }
+        self._api_raw_data: dict[str, Any] = {}
 
     async def _api_request(
         self,
@@ -67,7 +64,9 @@ class TradierRestAdapter:
     ) -> dict[str, Any]:
         """Tradier API request."""
 
-        _LOGGER.debug("aiohttp request: /%s (params=%s)", path, payload)
+        _LOGGER.debug(
+            "aiohttp request: /%s (params=%s) (payload=%s)", path, params, payload
+        )
 
         if self.aiohttp_session is None:
             aiohttp_session = ClientSession()
@@ -115,6 +114,7 @@ class TradierRestAdapter:
         return cast(dict[str, Any], resp_json)
 
     async def api_get_user_profile(self) -> dict[str, Any]:
+        "Get user profile (includes account metadata)."
         res = await self._api_request(
             "GET",
             f"{API_USER}/{API_PROFILE}",
@@ -124,6 +124,7 @@ class TradierRestAdapter:
         return res
 
     async def api_get_balances(self, account_id) -> dict[str, Any]:
+        """Get account balances."""
         res = await self._api_request(
             "GET", f"{API_ACCOUNTS}/{account_id}/{API_BALANCES}"
         )
@@ -132,6 +133,7 @@ class TradierRestAdapter:
         return res
 
     async def api_get_positions(self, account_id) -> dict[str, Any]:
+        """Get account positions."""
         res = await self._api_request(
             "GET", f"{API_ACCOUNTS}/{account_id}/{API_POSITIONS}"
         )
@@ -139,9 +141,48 @@ class TradierRestAdapter:
 
         return res
 
+    async def api_get_account_history(
+        self,
+        account_id: str,
+        page: int | None = None,
+        limit: int | None = None,
+        type_: str | None = None,
+        start: date | None = None,
+        end: date | None = None,
+        symbol: str | None = None,
+        exact_match: bool = False,
+    ) -> dict[str, Any]:
+        """Get account history."""
+
+        params = {
+            "account_id": account_id,
+        }
+        if page:
+            params["page"] = "f{page}"
+        if limit:
+            params["limit"] = f"{limit}"
+        if type_:
+            params["type_"] = f"{type_}"
+        if start:
+            params["start"] = start.strftime("%Y-%m-%d")
+        if end:
+            params["end"] = (end.strftime("%Y-%m-%d"),)
+        if symbol:
+            params["symbol"] = symbol
+        if exact_match:
+            params["exact_match"] = f"{exact_match}"
+
+        res = await self._api_request(
+            "GET", f"{API_ACCOUNTS}/{account_id}/{API_HISTORY}", params=params
+        )
+        self._api_raw_data[RAW_ACCOUNT_HISTORY] = res
+
+        return res
+
     async def api_get_quotes(
         self, symbols: list[str], greeks: bool = False
     ) -> dict[str, Any]:
+        """Get quote info."""
         params = {"symbols": ",".join(symbols), "greeks": f"{greeks}"}
         res = await self._api_request(
             "GET", f"{API_MARKETS}/{API_QUOTES}", params=params
@@ -158,6 +199,7 @@ class TradierRestAdapter:
         contract_size: bool = False,
         expiration_type: bool = False,
     ) -> dict[str, Any]:
+        """Get a list of option expirations."""
         params = {
             "symbol": symbol,
             "includeAllRoots": f"{include_all_roots}",
@@ -178,6 +220,7 @@ class TradierRestAdapter:
         symbol: str,
         expiration: date,
     ) -> dict[str, Any]:
+        """Get a list of option strikes."""
         params = {
             "symbol": symbol,
             "expiration": expiration.strftime("%Y-%m-%d"),
@@ -193,6 +236,7 @@ class TradierRestAdapter:
     async def api_get_option_chains(
         self, symbol: str, expiration: date, greeks: bool = False
     ) -> dict[str, Any]:
+        """Get options chains."""
         params = {
             "symbol": symbol,
             "expiration": expiration.strftime("%Y-%m-%d"),
@@ -203,6 +247,51 @@ class TradierRestAdapter:
             "GET", f"{API_MARKETS}/{API_OPTIONS}/{API_CHAINS}", params=params
         )
         self._api_raw_data[RAW_CHAINS] = res
+
+        return res
+
+    async def api_get_historical_quotes(
+        self,
+        symbol: str,
+        interval: str | None = None,
+        start: date = None,
+        end: date = None,
+        session_filter: str = None,
+    ) -> dict[str, Any]:
+        """Get historical pricing for a security.
+        This data will usually cover the entire lifetime of the company if sending
+        reasonable start/end times. You can fetch historical pricing for options
+        by passing the OCC option symbol (ex. AAPL220617C00270000) as the symbol."""
+
+        params = {"symbol": symbol}
+        if interval:
+            params["interval"] = f"{interval}"
+        if start:
+            params["start"] = start.strftime("%Y-%m-%d")
+        if end:
+            params["end"] = end.strftime("%Y-%m-%d")
+        if session_filter:
+            params["session_filter"] = f"{session_filter}"
+
+        res = await self._api_request(
+            "GET", f"{API_MARKETS}/{API_HISTORY}", params=params
+        )
+        self._api_raw_data[RAW_HISTORICAL_QUOTES] = res
+
+        return res
+
+    async def api_get_clock(self, delayed: bool = False) -> dict[str, Any]:
+        """Get the intraday market status.
+        This call will change and return information pertaining to the current
+        day. If programming logic on whether the market is open/closed – this
+        API call should be used to determine the current state."""
+
+        params = {"delayed": f"{delayed}"}
+
+        res = await self._api_request(
+            "GET", f"{API_MARKETS}/{API_CLOCK}", params=params
+        )
+        self._api_raw_data[RAW_CLOCK] = res
 
         return res
 
