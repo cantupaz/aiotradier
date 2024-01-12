@@ -11,9 +11,13 @@ from .exceptions import TradierError, LoginError, APIError, AuthError
 from .const import (
     API_ACCOUNTS,
     API_BALANCES,
+    API_BETA,
+    API_CALENDARS,
     API_CHAINS,
     API_CLOCK,
+    API_DIVIDENDS,
     API_EXPIRATIONS,
+    API_FUNDAMENTALS,
     API_HISTORY,
     API_MARKETS,
     API_OPTIONS,
@@ -27,8 +31,10 @@ from .const import (
     HTTP_CALL_TIMEOUT,
     RAW_ACCOUNT_HISTORY,
     RAW_BALANCES,
+    RAW_CALENDARS,
     RAW_CHAINS,
     RAW_CLOCK,
+    RAW_DIVIDENDS,
     RAW_EXPIRATIONS,
     RAW_HISTORICAL_QUOTES,
     RAW_POSITIONS,
@@ -64,8 +70,14 @@ class TradierAPIAdapter:
     ) -> dict[str, Any]:
         """Tradier API request."""
 
+        full_url = f"{API_URL}/{API_V1}/{path}"
+
         _LOGGER.debug(
-            "aiohttp request: /%s (params=%s) (payload=%s)", path, params, payload
+            "aiohttp request: %s %s (params=%s) (payload=%s)",
+            method,
+            full_url,
+            params,
+            payload,
         )
 
         if self.aiohttp_session is None:
@@ -81,7 +93,7 @@ class TradierAPIAdapter:
         try:
             async with aiohttp_session.request(
                 method,
-                f"{API_URL}/{API_V1}/{path}",
+                full_url,
                 headers=headers,
                 json=payload,
                 params=params,
@@ -182,7 +194,9 @@ class TradierAPIAdapter:
     async def api_get_quotes(
         self, symbols: list[str], greeks: bool = False
     ) -> dict[str, Any]:
-        """Get quote info."""
+        """Get a list of symbols using a keyword lookup on the symbols description.
+        Results are in descending order by average volume of the security."""
+
         params = {"symbols": ",".join(symbols), "greeks": f"{greeks}"}
         res = await self._api_request(
             "GET", f"{API_MARKETS}/{API_QUOTES}", params=params
@@ -199,7 +213,8 @@ class TradierAPIAdapter:
         contract_size: bool = False,
         expiration_type: bool = False,
     ) -> dict[str, Any]:
-        """Get a list of option expirations."""
+        """Get expiration dates for a particular underlying."""
+
         params = {
             "symbol": symbol,
             "includeAllRoots": f"{include_all_roots}",
@@ -220,7 +235,8 @@ class TradierAPIAdapter:
         symbol: str,
         expiration: date,
     ) -> dict[str, Any]:
-        """Get a list of option strikes."""
+        """Get an options strike prices for a specified expiration date."""
+
         params = {
             "symbol": symbol,
             "expiration": expiration.strftime("%Y-%m-%d"),
@@ -236,7 +252,7 @@ class TradierAPIAdapter:
     async def api_get_option_chains(
         self, symbol: str, expiration: date, greeks: bool = False
     ) -> dict[str, Any]:
-        """Get options chains."""
+        """Get all quotes in an option chain."""
         params = {
             "symbol": symbol,
             "expiration": expiration.strftime("%Y-%m-%d"),
@@ -295,26 +311,36 @@ class TradierAPIAdapter:
 
         return res
 
-    # async def api_get_installations(self) -> dict[str, Any]:
-    #     """Request API installations data."""
-    #     res = await self.api_request(
-    #         "GET",
-    #         f"{API_V1}/{API_INSTALLATIONS}",
-    #     )
-    #     self._api_raw_data[RAW_INSTALLATIONS_LIST] = res
+    async def api_get_calendars(self, symbols: list[str]) -> dict[str, Any]:
+        """Get corporate calendar information for securities.
+        This does not include dividend information."""
 
-    #     return res
+        params = {"symbols": ",".join(symbols)}
 
-    # async def list_installations(self) -> list[Installation]:
-    #     """Return Airzone Cloud installations list."""
-    #     inst_list: list[Installation] = []
+        res = await self._api_request(
+            "GET",
+            f"{API_BETA}/{API_MARKETS}/{API_FUNDAMENTALS}/{API_CALENDARS}",
+            params=params,
+        )
+        self._api_raw_data[RAW_CALENDARS] = res
 
-    #     inst_data = await self.api_get_installations()
-    #     for inst in inst_data[API_INSTALLATIONS]:
-    #         inst_list += [Installation(inst)]
+        return res
 
-    #     return inst_list
+    async def api_get_dividends(self, symbols: list[str]) -> dict[str, Any]:
+        """Get dividend information for a security. This will include previous
+        dividends as well as formally announced future dividend dates."""
+
+        params = {"symbols": ",".join(symbols)}
+
+        res = await self._api_request(
+            "GET",
+            f"{API_BETA}/{API_MARKETS}/{API_FUNDAMENTALS}/{API_DIVIDENDS}",
+            params=params,
+        )
+        self._api_raw_data[RAW_DIVIDENDS] = res
+
+        return res
 
     def raw_data(self) -> dict[str, Any]:
-        """Return raw Airzone Cloud API data."""
+        """Return raw API data."""
         return self._api_raw_data

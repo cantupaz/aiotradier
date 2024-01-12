@@ -60,6 +60,14 @@ async def do_quotes_stuff(client):
     print(res)
 
 
+async def do_fundamentals_stuff(client):
+    """Exercise API functions about Fundamentals."""
+
+    symbols = ["M"]
+    res = await client.api_get_calendars(symbols)
+    print(res)
+
+
 async def main():
     """Run Tradier get info example."""
 
@@ -73,8 +81,9 @@ async def main():
         client = TradierAPIAdapter(aiohttp_session, token)
 
         try:
-            await do_account_stuff(client)
-            await do_quotes_stuff(client)
+            # await do_account_stuff(client)
+            # await do_quotes_stuff(client)
+            await do_fundamentals_stuff(client)
 
         except TradierError as err:
             print(f"Error: {err.args}")

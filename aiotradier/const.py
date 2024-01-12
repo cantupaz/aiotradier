@@ -17,6 +17,10 @@ API_STRIKES: Final[str] = "strikes"
 API_CHAINS: Final[str] = "chains"
 API_HISTORY: Final[str] = "history"
 API_CLOCK: Final[str] = "clock"
+API_FUNDAMENTALS: Final[str] = "fundamentals"
+API_CALENDARS: Final[str] = "calendars"
+API_BETA: Final[str] = "beta"
+API_DIVIDENDS: Final[str] = "dividends"
 
 
 HTTP_CALL_TIMEOUT: Final[int] = 45
@@ -32,3 +36,5 @@ RAW_STRIKES: Final[str] = "strikes"
 RAW_ACCOUNT_HISTORY: Final[str] = "account_history"
 RAW_HISTORICAL_QUOTES: Final[str] = "historical_quotes"
 RAW_CLOCK: Final[str] = "clock"
+RAW_CALENDARS: Final[str] = "calendars"
+RAW_DIVIDENDS: Final[str] = "dividends"
