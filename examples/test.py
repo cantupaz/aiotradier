@@ -12,7 +12,6 @@ sys.path.insert(0, "/home/vscode/aiotradier/")
 from aiotradier.tradier_rest import TradierAPIAdapter
 from aiotradier.exceptions import TradierError
 
-
 _LOGGER = logging.getLogger("aiotradier.tradier_rest")
 
 
@@ -64,7 +63,7 @@ async def do_fundamentals_stuff(client):
     """Exercise API functions about Fundamentals."""
 
     symbols = ["M"]
-    res = await client.api_get_calendars(symbols)
+    res = await client.api_get_dividends(symbols)
     print(res)
 
 

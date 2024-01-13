@@ -1,13 +1,12 @@
 """Provide AsyncIO access to Tradier API"""
 
-import asyncio
 import logging
 from datetime import date
 import json
 from typing import Any, cast
 from aiohttp import ClientConnectorError, ClientResponseError, ClientSession
 
-from .exceptions import TradierError, LoginError, APIError, AuthError
+from .exceptions import TradierError, APIError, AuthError
 from .const import (
     API_ACCOUNTS,
     API_BALANCES,
@@ -70,15 +69,7 @@ class TradierAPIAdapter:
     ) -> dict[str, Any]:
         """Tradier API request."""
 
-        full_url = f"{API_URL}/{API_V1}/{path}"
-
-        _LOGGER.debug(
-            "aiohttp request: %s %s (params=%s) (payload=%s)",
-            method,
-            full_url,
-            params,
-            payload,
-        )
+        full_url = f"{API_URL}/{path}"
 
         if self.aiohttp_session is None:
             aiohttp_session = ClientSession()
@@ -89,6 +80,15 @@ class TradierAPIAdapter:
             "Authorization": f"Bearer {self.token}",
             "Accept": "application/json",
         }
+
+        _LOGGER.debug(
+            "aiohttp request: %s %s (params=%s) (headers=%s) (payload=%s)",
+            method,
+            full_url,
+            params,
+            headers,
+            payload,
+        )
 
         try:
             async with aiohttp_session.request(
@@ -119,7 +119,7 @@ class TradierAPIAdapter:
         try:
             resp_json = json.loads(resp_text)
         except json.JSONDecodeError as err:
-            _LOGGER.error("Problems decoding response %s", resp_text)
+            # _LOGGER.error("Problems decoding response %s", resp_text)
             raise TradierError(err) from err
 
         _LOGGER.debug("aiohttp response: %s", resp_json)
@@ -129,7 +129,7 @@ class TradierAPIAdapter:
         "Get user profile (includes account metadata)."
         res = await self._api_request(
             "GET",
-            f"{API_USER}/{API_PROFILE}",
+            f"{API_V1}/{API_USER}/{API_PROFILE}",
         )
         self._api_raw_data[RAW_USER_PROFILE] = res
 
@@ -138,7 +138,7 @@ class TradierAPIAdapter:
     async def api_get_balances(self, account_id) -> dict[str, Any]:
         """Get account balances."""
         res = await self._api_request(
-            "GET", f"{API_ACCOUNTS}/{account_id}/{API_BALANCES}"
+            "GET", f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_BALANCES}"
         )
         self._api_raw_data[RAW_BALANCES] = res
 
@@ -147,7 +147,7 @@ class TradierAPIAdapter:
     async def api_get_positions(self, account_id) -> dict[str, Any]:
         """Get account positions."""
         res = await self._api_request(
-            "GET", f"{API_ACCOUNTS}/{account_id}/{API_POSITIONS}"
+            "GET", f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_POSITIONS}"
         )
         self._api_raw_data[RAW_POSITIONS] = res
 
@@ -185,7 +185,7 @@ class TradierAPIAdapter:
             params["exact_match"] = f"{exact_match}"
 
         res = await self._api_request(
-            "GET", f"{API_ACCOUNTS}/{account_id}/{API_HISTORY}", params=params
+            "GET", f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_HISTORY}", params=params
         )
         self._api_raw_data[RAW_ACCOUNT_HISTORY] = res
 
@@ -199,7 +199,7 @@ class TradierAPIAdapter:
 
         params = {"symbols": ",".join(symbols), "greeks": f"{greeks}"}
         res = await self._api_request(
-            "GET", f"{API_MARKETS}/{API_QUOTES}", params=params
+            "GET", f"{API_V1}/{API_MARKETS}/{API_QUOTES}", params=params
         )
         self._api_raw_data[RAW_QUOTES] = res
 
@@ -222,9 +222,10 @@ class TradierAPIAdapter:
             "contractSize": f"{contract_size}",
             "expirationType": f"{expiration_type}",
         }
-
         res = await self._api_request(
-            "GET", f"{API_MARKETS}/{API_OPTIONS}/{API_EXPIRATIONS}", params=params
+            "GET",
+            f"{API_V1}/{API_MARKETS}/{API_OPTIONS}/{API_EXPIRATIONS}",
+            params=params,
         )
         self._api_raw_data[RAW_EXPIRATIONS] = res
 
@@ -241,9 +242,8 @@ class TradierAPIAdapter:
             "symbol": symbol,
             "expiration": expiration.strftime("%Y-%m-%d"),
         }
-
         res = await self._api_request(
-            "GET", f"{API_MARKETS}/{API_OPTIONS}/{API_STRIKES}", params=params
+            "GET", f"{API_V1}/{API_MARKETS}/{API_OPTIONS}/{API_STRIKES}", params=params
         )
         self._api_raw_data[RAW_STRIKES] = res
 
@@ -258,9 +258,8 @@ class TradierAPIAdapter:
             "expiration": expiration.strftime("%Y-%m-%d"),
             "greeks": f"{greeks}",
         }
-
         res = await self._api_request(
-            "GET", f"{API_MARKETS}/{API_OPTIONS}/{API_CHAINS}", params=params
+            "GET", f"{API_V1}/{API_MARKETS}/{API_OPTIONS}/{API_CHAINS}", params=params
         )
         self._api_raw_data[RAW_CHAINS] = res
 
@@ -290,7 +289,7 @@ class TradierAPIAdapter:
             params["session_filter"] = f"{session_filter}"
 
         res = await self._api_request(
-            "GET", f"{API_MARKETS}/{API_HISTORY}", params=params
+            "GET", f"{API_V1}/{API_MARKETS}/{API_HISTORY}", params=params
         )
         self._api_raw_data[RAW_HISTORICAL_QUOTES] = res
 
@@ -303,9 +302,8 @@ class TradierAPIAdapter:
         API call should be used to determine the current state."""
 
         params = {"delayed": f"{delayed}"}
-
         res = await self._api_request(
-            "GET", f"{API_MARKETS}/{API_CLOCK}", params=params
+            "GET", f"{API_V1}/{API_MARKETS}/{API_CLOCK}", params=params
         )
         self._api_raw_data[RAW_CLOCK] = res
 
@@ -316,7 +314,6 @@ class TradierAPIAdapter:
         This does not include dividend information."""
 
         params = {"symbols": ",".join(symbols)}
-
         res = await self._api_request(
             "GET",
             f"{API_BETA}/{API_MARKETS}/{API_FUNDAMENTALS}/{API_CALENDARS}",
@@ -331,7 +328,6 @@ class TradierAPIAdapter:
         dividends as well as formally announced future dividend dates."""
 
         params = {"symbols": ",".join(symbols)}
-
         res = await self._api_request(
             "GET",
             f"{API_BETA}/{API_MARKETS}/{API_FUNDAMENTALS}/{API_DIVIDENDS}",
