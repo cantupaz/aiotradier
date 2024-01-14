@@ -9,5 +9,5 @@ class APIError(TradierError):
     """Exception raised when API fails."""
 
 
-class AuthError(LoginError):
+class AuthError(TradierError):
     """Exception raised when API denies access."""

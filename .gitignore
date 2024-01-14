@@ -1,2 +1,4 @@
+aiotradier.egg-info
+dist
 token.txt
-__pycache*
+__pycache__

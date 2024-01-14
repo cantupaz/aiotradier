@@ -1,7 +1,7 @@
 """Provide AsyncIO access to Tradier API"""
 
 import logging
-from datetime import date
+from datetime import date, datetime
 import json
 from typing import Any, cast
 from aiohttp import ClientConnectorError, ClientResponseError, ClientSession
@@ -18,12 +18,15 @@ from .const import (
     API_EXPIRATIONS,
     API_FUNDAMENTALS,
     API_HISTORY,
+    API_LOOKUP,
     API_MARKETS,
     API_OPTIONS,
     API_POSITIONS,
     API_PROFILE,
     API_QUOTES,
+    API_SEARCH,
     API_STRIKES,
+    API_TIMESALES,
     API_URL,
     API_USER,
     API_V1,
@@ -36,8 +39,11 @@ from .const import (
     RAW_DIVIDENDS,
     RAW_EXPIRATIONS,
     RAW_HISTORICAL_QUOTES,
+    RAW_LOOKUP,
     RAW_POSITIONS,
+    RAW_SEARCH,
     RAW_STRIKES,
+    RAW_TIMESALES,
     RAW_USER_PROFILE,
     RAW_QUOTES,
 )
@@ -178,7 +184,7 @@ class TradierAPIAdapter:
         if start:
             params["start"] = start.strftime("%Y-%m-%d")
         if end:
-            params["end"] = (end.strftime("%Y-%m-%d"),)
+            params["end"] = end.strftime("%Y-%m-%d")
         if symbol:
             params["symbol"] = symbol
         if exact_match:
@@ -292,6 +298,73 @@ class TradierAPIAdapter:
             "GET", f"{API_V1}/{API_MARKETS}/{API_HISTORY}", params=params
         )
         self._api_raw_data[RAW_HISTORICAL_QUOTES] = res
+
+        return res
+
+    async def api_get_timesales(
+        self,
+        symbol: str,
+        interval: str | None = "tick",
+        start: datetime = None,
+        end: datetime = None,
+        session_filter: str = None,
+    ) -> dict[str, Any]:
+        """Time and Sales (timesales) is typically used for charting purposes.
+        It captures pricing across a time slice at predefined intervals.
+        Tick data is also available through this endpoint. This results in a very large
+        data set for high-volume symbols, so the time slice needs to be much smaller
+        to keep downloads time reasonable."""
+
+        params = {"symbol": symbol}
+        if interval:
+            params["interval"] = f"{interval}"
+        if start:
+            params["start"] = start.strftime("%Y-%m-%d %H:%M")
+        if end:
+            params["end"] = end.strftime("%Y-%m-%d %H:%M")
+        if session_filter:
+            params["session_filter"] = f"{session_filter}"
+
+        res = await self._api_request(
+            "GET", f"{API_V1}/{API_MARKETS}/{API_TIMESALES}", params=params
+        )
+        self._api_raw_data[RAW_TIMESALES] = res
+
+        return res
+
+    async def api_get_search(self, query: str) -> dict[str, Any]:
+        """Get a list of symbols using a keyword lookup on the symbols description.
+        Results are in descending order by average volume of the security.
+        This can be used for simple search functions."""
+
+        params = {"q": query}
+        res = await self._api_request(
+            "GET", f"{API_V1}/{API_MARKETS}/{API_SEARCH}", params=params
+        )
+        self._api_raw_data[RAW_SEARCH] = res
+
+        return res
+
+    async def api_get_lookup(
+        self,
+        query: str,
+        exchanges: list[str] | None = None,
+        types: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Search for a symbol using the ticker symbol or partial symbol.
+        Results are in descending order by average volume of the security.
+        This can be used for simple search functions."""
+
+        params = {"q": query}
+        if exchanges:
+            params["exchanges"] = ",".join(exchanges)
+        if types:
+            params["types"] = ",".join(types)
+
+        res = await self._api_request(
+            "GET", f"{API_V1}/{API_MARKETS}/{API_LOOKUP}", params=params
+        )
+        self._api_raw_data[RAW_LOOKUP] = res
 
         return res
 

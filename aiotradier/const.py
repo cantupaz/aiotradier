@@ -2,7 +2,7 @@
 
 from typing import Final
 
-API_URL: Final[str] = "https://sandbox.tradier.com"
+API_URL: Final[str] = "https://api.tradier.com"
 API_V1: Final[str] = "v1"
 API_USER = "user"
 API_PROFILE = "profile"
@@ -21,7 +21,9 @@ API_FUNDAMENTALS: Final[str] = "fundamentals"
 API_CALENDARS: Final[str] = "calendars"
 API_BETA: Final[str] = "beta"
 API_DIVIDENDS: Final[str] = "dividends"
-
+API_TIMESALES: Final[str] = "timesales"
+API_SEARCH: Final[str] = "search"
+API_LOOKUP: Final[str] = "lookup"
 
 HTTP_CALL_TIMEOUT: Final[int] = 45
 HTTP_MAX_REQUESTS: Final[int] = 4
@@ -38,3 +40,6 @@ RAW_HISTORICAL_QUOTES: Final[str] = "historical_quotes"
 RAW_CLOCK: Final[str] = "clock"
 RAW_CALENDARS: Final[str] = "calendars"
 RAW_DIVIDENDS: Final[str] = "dividends"
+RAW_TIMESALES: Final[str] = "timesales"
+RAW_SEARCH: Final[str] = "search"
+RAW_LOOKUP: Final[str] = "lookup"
