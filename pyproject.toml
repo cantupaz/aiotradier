@@ -1,0 +1,27 @@
+[project]
+name = "aiotradier"
+version = "0.0.1"
+authors = [
+  { name="Erick Cantú Paz", email="cantupaz@gmail.com" },
+]
+description = "Python library to access Tradier´s API using Async IO"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+]
+
+dependencies = [
+  "aiohttp"
+]
+[project.urls]
+Homepage = "https://github.com/cantupaz/aiotradier"
+Issues = "https://github.com/cantupaz/aiotradier/issues"
+
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
