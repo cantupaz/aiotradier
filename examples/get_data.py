@@ -7,8 +7,7 @@ import datetime
 import logging
 
 
-# from aiotradier import TradierAPIAdapter, TradierError
-import aiotradier
+from aiotradier import TradierAPIAdapter, TradierError
 
 
 _LOGGER = logging.getLogger("aiotradier.tradier_rest")
@@ -25,8 +24,6 @@ async def do_account_stuff(client):
         client.api_get_balances(account_id),
         client.api_get_positions(account_id),
         client.api_get_account_history(account_id),
-        client.api_get_account_gainloss(account_id),
-        client.api_get_account_orders(account_id),
     )
 
 
@@ -57,7 +54,6 @@ async def do_market_stuff(client):
     )
 
     await client.api_get_clock()
-    await client.api_get_calendar()
     await client.api_get_search("alphabet")
     await client.api_get_lookup(
         "goog", exchanges=["Q", "N"], types=["stock", "option", "etf", "index"]
@@ -68,9 +64,8 @@ async def do_fundamentals_stuff(client):
     """Exercise API functions about Fundamentals."""
 
     symbols = ["M"]
-    await client.api_get_company(symbols)
-    await client.api_get_calendars(symbols)
     await client.api_get_dividends(symbols)
+    await client.api_get_calendars(symbols)
 
 
 async def main():
@@ -83,7 +78,7 @@ async def main():
         token = file.readline().strip()
 
     async with aiohttp.ClientSession() as aiohttp_session:
-        client = TradierAPIAdapter(aiohttp_session, token)
+        client = TradierAPIAdapter(aiohttp_session, token, sandbox=False)
 
         try:
             await do_account_stuff(client)

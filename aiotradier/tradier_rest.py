@@ -6,24 +6,39 @@ import json
 from typing import Any, cast
 from aiohttp import ClientConnectorError, ClientResponseError, ClientSession
 
+
+from .common import (
+    EquityOrderSide,
+    OptionOrderSide,
+    OrderClass,
+    OrderDuration,
+    OrderType,
+    SortBy,
+    SortOrder,
+)
 from .exceptions import TradierError, APIError, AuthError
 from .const import (
     API_ACCOUNTS,
     API_BALANCES,
     API_BETA,
+    API_CALENDAR,
     API_CALENDARS,
     API_CHAINS,
     API_CLOCK,
+    API_COMPANY,
     API_DIVIDENDS,
     API_EXPIRATIONS,
     API_FUNDAMENTALS,
+    API_GAINLOSS,
     API_HISTORY,
     API_LOOKUP,
     API_MARKETS,
     API_OPTIONS,
+    API_ORDERS,
     API_POSITIONS,
     API_PROFILE,
     API_QUOTES,
+    API_SANDBOX_URL,
     API_SEARCH,
     API_STRIKES,
     API_TIMESALES,
@@ -33,13 +48,20 @@ from .const import (
     HTTP_CALL_TIMEOUT,
     RAW_ACCOUNT_HISTORY,
     RAW_BALANCES,
+    RAW_CALENDAR,
     RAW_CALENDARS,
     RAW_CHAINS,
     RAW_CLOCK,
+    RAW_COMPANY,
     RAW_DIVIDENDS,
     RAW_EXPIRATIONS,
+    RAW_GAINLOSS,
     RAW_HISTORICAL_QUOTES,
     RAW_LOOKUP,
+    RAW_ORDER_DETAIL,
+    RAW_ORDERS,
+    RAW_PLACE_EQUITY_ORDER,
+    RAW_PLACE_OPTION_ORDER,
     RAW_POSITIONS,
     RAW_SEARCH,
     RAW_STRIKES,
@@ -55,14 +77,13 @@ class TradierAPIAdapter:
     """Access Tradier API."""
 
     def __init__(
-        self,
-        aiohttp_session: ClientSession | None,
-        token: str = "",
+        self, aiohttp_session: ClientSession | None, token: str = "", sandbox=True
     ):
         """Set up the Adapter."""
 
         self.aiohttp_session: ClientSession | None = aiohttp_session
         self.token = token
+        self.url = API_SANDBOX_URL if sandbox else API_URL
 
         self._api_raw_data: dict[str, Any] = {}
 
@@ -75,7 +96,7 @@ class TradierAPIAdapter:
     ) -> dict[str, Any]:
         """Tradier API request."""
 
-        full_url = f"{API_URL}/{path}"
+        full_url = f"{self.url}/{path}"
 
         if self.aiohttp_session is None:
             aiohttp_session = ClientSession()
@@ -114,8 +135,6 @@ class TradierAPIAdapter:
                 raise APIError(err) from err
             if err.status == 401:
                 raise AuthError(err) from err
-            # if err.status == 429:
-            #     raise TooManyRequests(err) from err
             raise TradierError(err) from err
 
         finally:
@@ -125,11 +144,13 @@ class TradierAPIAdapter:
         try:
             resp_json = json.loads(resp_text)
         except json.JSONDecodeError as err:
-            # _LOGGER.error("Problems decoding response %s", resp_text)
+            _LOGGER.error("Problems decoding response %s", resp_text)
             raise TradierError(err) from err
 
         _LOGGER.debug("aiohttp response: %s", resp_json)
         return cast(dict[str, Any], resp_json)
+
+    ############ Account
 
     async def api_get_user_profile(self) -> dict[str, Any]:
         "Get user profile (includes account metadata)."
@@ -141,7 +162,7 @@ class TradierAPIAdapter:
 
         return res
 
-    async def api_get_balances(self, account_id) -> dict[str, Any]:
+    async def api_get_balances(self, account_id: str) -> dict[str, Any]:
         """Get account balances."""
         res = await self._api_request(
             "GET", f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_BALANCES}"
@@ -150,7 +171,7 @@ class TradierAPIAdapter:
 
         return res
 
-    async def api_get_positions(self, account_id) -> dict[str, Any]:
+    async def api_get_positions(self, account_id: str) -> dict[str, Any]:
         """Get account positions."""
         res = await self._api_request(
             "GET", f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_POSITIONS}"
@@ -196,6 +217,92 @@ class TradierAPIAdapter:
         self._api_raw_data[RAW_ACCOUNT_HISTORY] = res
 
         return res
+
+    async def api_get_account_gainloss(
+        self,
+        account_id: str,
+        page: int | None = None,
+        limit: int | None = None,
+        sort_by: SortBy | None = None,
+        sort_order: SortOrder | None = None,
+        start: date | None = None,
+        end: date | None = None,
+        symbol: str | None = None,
+        exact_match: bool = False,
+    ) -> dict[str, Any]:
+        """Get account history."""
+
+        params = {
+            "account_id": account_id,
+        }
+        if page:
+            params["page"] = "f{page}"
+        if limit:
+            params["limit"] = f"{limit}"
+        if sort_by:
+            params["sortBy"] = str(sort_by)
+        if sort_order:
+            params["sort"] = str(sort_order)
+        if start:
+            params["start"] = start.strftime("%Y-%m-%d")
+        if end:
+            params["end"] = end.strftime("%Y-%m-%d")
+        if symbol:
+            params["symbol"] = symbol
+
+        res = await self._api_request(
+            "GET", f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_GAINLOSS}", params=params
+        )
+        self._api_raw_data[RAW_GAINLOSS] = res
+
+        return res
+
+    async def api_get_account_orders(
+        self,
+        account_id: str,
+        page: int | None = None,
+        include_tags: bool | None = None,
+    ) -> dict[str, Any]:
+        """Retrieve orders placed within an account.
+        This API will return orders placed for the market session of the present calendar day."""
+
+        params = {"account_id": account_id}
+
+        if page:
+            params["page"] = "f{page}"
+        if include_tags:
+            params["includeTags"] = str(include_tags)
+
+        res = await self._api_request(
+            "GET", f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_ORDERS}", params=params
+        )
+        self._api_raw_data[RAW_ORDERS] = res
+
+        return res
+
+    async def api_get_order(
+        self,
+        account_id: str,
+        order_id: str,
+        include_tags: bool | None = None,
+    ) -> dict[str, Any]:
+        """Get detailed information about a previously placed order."""
+
+        params = {"account_id": account_id}
+
+        if include_tags:
+            params["includeTags"] = str(include_tags)
+
+        res = await self._api_request(
+            "GET",
+            f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_ORDERS}/{order_id}",
+            params=params,
+        )
+        self._api_raw_data[RAW_ORDER_DETAIL] = res
+
+        return res
+
+    ############# Market Data
 
     async def api_get_quotes(
         self, symbols: list[str], greeks: bool = False
@@ -332,6 +439,38 @@ class TradierAPIAdapter:
 
         return res
 
+    async def api_get_clock(self, delayed: bool = False) -> dict[str, Any]:
+        """Get the intraday market status.
+        This call will change and return information pertaining to the current
+        day. If programming logic on whether the market is open/closed – this
+        API call should be used to determine the current state."""
+
+        params = {"delayed": f"{delayed}"}
+        res = await self._api_request(
+            "GET", f"{API_V1}/{API_MARKETS}/{API_CLOCK}", params=params
+        )
+        self._api_raw_data[RAW_CLOCK] = res
+
+        return res
+
+    async def api_get_calendar(
+        self, month: int | None = None, year: int | None = None
+    ) -> dict[str, Any]:
+        """Get the market calendar for the current or given month.
+        This can be used to plan ahead regarding strategies.
+        However, api_get_clock should be used to determine the current status of the market.
+        """
+        params = {
+            "month": f"{month:2f}",
+            "year": f"{year}",
+        }
+        res = await self._api_request(
+            "GET", f"{API_V1}/{API_MARKETS}/{API_CALENDAR}", params=params
+        )
+        self._api_raw_data[RAW_CALENDAR] = res
+
+        return res
+
     async def api_get_search(self, query: str) -> dict[str, Any]:
         """Get a list of symbols using a keyword lookup on the symbols description.
         Results are in descending order by average volume of the security.
@@ -368,19 +507,17 @@ class TradierAPIAdapter:
 
         return res
 
-    async def api_get_clock(self, delayed: bool = False) -> dict[str, Any]:
-        """Get the intraday market status.
-        This call will change and return information pertaining to the current
-        day. If programming logic on whether the market is open/closed – this
-        API call should be used to determine the current state."""
+    ############# Fundamentals
 
-        params = {"delayed": f"{delayed}"}
+    async def api_get_company(self, symbols: list[str]) -> dict[str, Any]:
+        """Get company fundamental information."""
+        params = {"symbols": ",".join(symbols)}
         res = await self._api_request(
-            "GET", f"{API_V1}/{API_MARKETS}/{API_CLOCK}", params=params
+            "GET",
+            f"{API_BETA}/{API_MARKETS}/{API_FUNDAMENTALS}/{API_COMPANY}",
+            params=params,
         )
-        self._api_raw_data[RAW_CLOCK] = res
-
-        return res
+        self._api_raw_data[RAW_COMPANY] = res
 
     async def api_get_calendars(self, symbols: list[str]) -> dict[str, Any]:
         """Get corporate calendar information for securities.
@@ -407,6 +544,90 @@ class TradierAPIAdapter:
             params=params,
         )
         self._api_raw_data[RAW_DIVIDENDS] = res
+
+        return res
+
+    ############# Trading
+
+    async def api_place_equity_order(
+        self,
+        account_id: str,
+        order_class: OrderClass,
+        symbol: str,
+        side: EquityOrderSide,
+        quantity: int,
+        order_type: OrderType,
+        duration: OrderDuration,
+        price: float | None = None,
+        stop: float | None = None,
+        tag: str | None = None,
+    ) -> dict[str, Any]:
+        """Place an order to trade an equity security."""
+
+        params = {
+            "class": str(order_class),
+            "symbol": symbol,
+            "side": str(side),
+            "quantity": str(quantity),
+            "order_type": str(order_type),
+            "duration": str(duration),
+        }
+        if price:
+            params["price"] = str(price)
+        if stop:
+            params["stop"] = str(stop)
+        if tag:
+            # FIXME validate Maximum lenght of 255 characters. Valid characters are letters, numbers and -
+            params["tag"] = tag
+
+        res = await self._api_request(
+            "POST",
+            f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_ORDERS}",
+            params=params,
+        )
+        self._api_raw_data[RAW_PLACE_EQUITY_ORDER] = res
+
+        return res
+
+    async def api_place_option_order(
+        self,
+        account_id: str,
+        order_class: OrderClass,
+        symbol: str,
+        option_symbol: str,
+        side: OptionOrderSide,
+        quantity: int,
+        order_type: OrderType,
+        duration: OrderDuration,
+        price: float | None = None,
+        stop: float | None = None,
+        tag: str | None = None,
+    ) -> dict[str, Any]:
+        """Place an order to trade a single option."""
+
+        params = {
+            "class": str(order_class),
+            "symbol": symbol,
+            "option_symbol": option_symbol,
+            "side": str(side),
+            "quantity": str(quantity),
+            "order_type": str(order_type),
+            "duration": str(duration),
+        }
+        if price:
+            params["price"] = str(price)
+        if stop:
+            params["stop"] = str(stop)
+        if tag:
+            # FIXME validate Maximum lenght of 255 characters. Valid characters are letters, numbers and -
+            params["tag"] = tag
+
+        res = await self._api_request(
+            "POST",
+            f"{API_V1}/{API_ACCOUNTS}/{account_id}/{API_ORDERS}",
+            params=params,
+        )
+        self._api_raw_data[RAW_PLACE_OPTION_ORDER] = res
 
         return res
 

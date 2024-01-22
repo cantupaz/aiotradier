@@ -1,6 +1,6 @@
 [project]
 name = "aiotradier"
-version = "0.0.2"
+version = "0.0.9"
 authors = [
   { name="Erick Cantú Paz", email="cantupaz@gmail.com" },
 ]
